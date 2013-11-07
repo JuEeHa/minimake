@@ -1,6 +1,5 @@
 minimake is or will be
 * implementation of minimalistic version of make
-* nortti's vision of how make should be
 
 minimake is NOT and will NOT be
 * POSIX compatible

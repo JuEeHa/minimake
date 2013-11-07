@@ -165,8 +165,8 @@ preprocess(char *start, unsigned int line) {
 
 void
 parseline(char *start, unsigned int *mode, struct target *t, unsigned int line) {
-	unsigned int i;
-	char *name;
+	unsigned int i, j, len;
+	char *name, *ppdname, *dep;
 	/* TODO: implement variables, trimming of comments and removal of trailing whitespace in target/var declarations */
 	debg("\tparseline\n");
 	if(*start=='\t') {
@@ -221,12 +221,40 @@ parseline(char *start, unsigned int *mode, struct target *t, unsigned int line) 
 			name=xmalloc(i+1);
 			memcpy(name, start, i);
 			name[i]=0;
-			name=preprocess(name, line);
-			(*t).name=name;
+			(*t).name=preprocess(name, line);
 			puts((*t).name); /* devout */
-			/* TODO: deps */
-			
 			free(name);
+			
+			/* put pointer to start of dependency list */
+			i++;
+			while(isblank(start[i])) i++;
+			/* TODO: deps */
+			while(start[i]) {
+				debg("\t\t\t\tdep\n");
+				dep=start+i; /* start of dependency */
+				for(len=0; start[i] && !isblank(start[i]); len++, i++);
+				
+				name=xmalloc(len+1);
+				memcpy(name, dep, len);
+				name[len]=0;
+				ppdname=preprocess(name, line);
+				free(name);
+				
+				if(!(*t).deps) {
+					(*t).deps=xmalloc(sizeof(char*));
+					(*t).deps[0]=0;
+				}
+				
+				for(j=0; (*t).deps[j]; j++);
+				(*t).deps[j]=ppdname;
+				printf("D: '%s'\n", (*t).deps[j]); /* devout */
+				free(ppdname);
+				
+				(*t).deps=xrealloc((*t).deps, j+2);
+				(*t).deps[j+1]=0;
+				while(isblank(start[i]) && start[i]) i++;
+			}
+			
 			*mode=pm_target;
 		}
 		/* TODO: variables */
@@ -270,5 +298,6 @@ main(int argc, char **argv) {
 		return -1;
 	
 	parse();
+	
 	return 0;
 }
