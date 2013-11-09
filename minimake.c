@@ -15,7 +15,11 @@
 #define pm_def 3
 
 #define debug 0
-#define debg(...) if(debug) printf(__VA_ARGS__)
+#if debug
+	#define debg(...) if(debug) printf(__VA_ARGS__)
+#else
+	#define debg(...)
+#endif
 
 struct target {
 	int isliteral; /* set to zero is the target contains '%', nonzero otherwise */
@@ -100,6 +104,12 @@ preprocess(char *start, unsigned int line) {
 	char *ret, *p, *varname, *varval;
 	unsigned int i, di;
 	
+	debg("'%s' %u\n", start, strlen(start));
+	if(!*start) {
+		ret=xmalloc(1);
+		ret[0]=0;
+		return ret;
+	}
 	ret=0; /* realloc should regard NULL as 0B allocation */
 	for(p=start, di=0; *p; p++)
 		if(*p=='$') {
@@ -140,7 +150,7 @@ preprocess(char *start, unsigned int line) {
 			
 			for(i=0; vars[i] && strcmp(vars[i][0], varname); i++);
 			if(vars[i])
-				varval=vars[i][0];
+				varval=vars[i][1];
 			else if(!(varval=getenv(varname))) { /* if getenv returns NULL, this gets run; if getenv returns a value, it ends in varval */
 				varval="";
 			}
@@ -167,7 +177,7 @@ void
 parseline(char *start, unsigned int *mode, struct target *t, unsigned int line) {
 	unsigned int i, j, len;
 	char *name, *ppdname, *dep;
-	/* TODO: implement variables, trimming of comments and removal of trailing whitespace in target/var declarations */
+	
 	debg("\tparseline\n");
 	if(*start=='\t') {
 		debg("\t\tcmd\n");
@@ -186,7 +196,7 @@ parseline(char *start, unsigned int *mode, struct target *t, unsigned int line) 
 			
 			(*t).cmds[i]=preprocess(start+1, line);
 			
-			(*t).cmds=xrealloc((*t).cmds, i+2*sizeof(char*)); /* i+1 = current size -> i+2 = one bigger */
+			(*t).cmds=xrealloc((*t).cmds, (i+2)*sizeof(char*)); /* i+1 = current size -> i+2 = one bigger */
 			(*t).cmds[i+1]=0;
 		} else {
 			fprintf(stderr, "make: %u: unexpected tab\n", line);
@@ -205,7 +215,7 @@ parseline(char *start, unsigned int *mode, struct target *t, unsigned int line) 
 		
 		targetlist[i]=xmalloc(sizeof(struct target));
 		memcpy(targetlist[i], t, sizeof(struct target));
-		targetlist=xrealloc(targetlist, i+2); /* see above */
+		targetlist=xrealloc(targetlist, (i+2)*sizeof(struct target*)); /* see above */
 		targetlist[i+1]=0;
 		memset(t, 0, sizeof(struct target));
 	}
@@ -222,13 +232,12 @@ parseline(char *start, unsigned int *mode, struct target *t, unsigned int line) 
 			memcpy(name, start, i);
 			name[i]=0;
 			(*t).name=preprocess(name, line);
-			puts((*t).name); /* devout */
+			/*puts((*t).name); /* devout */
 			free(name);
 			
 			/* put pointer to start of dependency list */
 			i++;
 			while(isblank(start[i])) i++;
-			/* TODO: deps */
 			while(start[i]) {
 				debg("\t\t\t\tdep\n");
 				dep=start+i; /* start of dependency */
@@ -247,17 +256,37 @@ parseline(char *start, unsigned int *mode, struct target *t, unsigned int line) 
 				
 				for(j=0; (*t).deps[j]; j++);
 				(*t).deps[j]=ppdname;
-				printf("D: '%s'\n", (*t).deps[j]); /* devout */
+				/*printf("D: '%s'\n", (*t).deps[j]); /* devout */
 				free(ppdname);
 				
-				(*t).deps=xrealloc((*t).deps, j+2);
+				(*t).deps=xrealloc((*t).deps, (j+2)*sizeof(char*));
 				(*t).deps[j+1]=0;
 				while(isblank(start[i]) && start[i]) i++;
 			}
 			
 			*mode=pm_target;
+		} else if (start[i]=='=') { /* TODO: += and ?= */
+			if(!vars) {
+				vars=xmalloc(sizeof(char**));
+				vars[0]=0;
+			}
+			
+			name=xmalloc(i+1);
+			memcpy(name, start, i);
+			name[i]=0;
+			/*puts(name); /* devout */
+			
+			for(j=0; vars[j]; j++);
+			vars[j]=xmalloc(2*sizeof(char*));
+			
+			vars[j][0]=preprocess(name, line);
+			free(name);
+			for(i++; start[i] && isblank(start[i]); i++);
+			vars[j][1]=preprocess(start+i, line);
+				
+			vars=xrealloc(vars, (j+2)*sizeof(char**));
+			vars[j+1]=0;
 		}
-		/* TODO: variables */
 	} else if(!*start || *start=='#') {
 		*mode=pm_skip;
 	} else if(*start!='\t') {
@@ -288,6 +317,23 @@ parse(void) {
 }
 
 int
+maketarget(char *target) {
+	int i;
+	
+	/* TODO: isliteral */
+	/* TODO: check if needs execution */
+	/* TODO: recurse */
+	/* TODO: execute commands */
+	for(i=0; targetlist[i] && strcmp((*targetlist[i]).name, target); i++)
+	
+	if(!targetlist[i]) {
+		fprintf(stderr, "make: *** no target '%s'\n", target);
+		exit(1);
+	}
+	puts(target); /* devout */
+}
+
+int
 main(int argc, char **argv) {
 	int fd;
 	
@@ -298,6 +344,9 @@ main(int argc, char **argv) {
 		return -1;
 	
 	parse();
+	
+	if(targetlist && *targetlist)
+		maketarget((**targetlist).name);
 	
 	return 0;
 }
