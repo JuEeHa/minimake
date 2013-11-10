@@ -84,21 +84,6 @@ readtobuf(int f) {
 	return 0;
 }
 
-void
-deltarget(struct target *t) {
-	struct target tmp;
-	char **pp;
-	
-	memcpy(&tmp, t, sizeof(struct target));
-	free(t);
-	
-	free(tmp.name);
-	
-	for(pp=tmp.deps; *pp; pp++)
-		free(*pp);
-	free(tmp.deps);
-}
-
 char*
 preprocess(char *start, unsigned int line) {
 	char *ret, *p, *varname, *varval;
@@ -232,7 +217,6 @@ parseline(char *start, unsigned int *mode, struct target *t, unsigned int line) 
 			memcpy(name, start, i);
 			name[i]=0;
 			(*t).name=preprocess(name, line);
-			/*puts((*t).name); /* devout */
 			free(name);
 			
 			/* put pointer to start of dependency list */
@@ -256,7 +240,6 @@ parseline(char *start, unsigned int *mode, struct target *t, unsigned int line) 
 				
 				for(j=0; (*t).deps[j]; j++);
 				(*t).deps[j]=ppdname;
-				/*printf("D: '%s'\n", (*t).deps[j]); /* devout */
 				free(ppdname);
 				
 				(*t).deps=xrealloc((*t).deps, (j+2)*sizeof(char*));
@@ -274,7 +257,6 @@ parseline(char *start, unsigned int *mode, struct target *t, unsigned int line) 
 			name=xmalloc(i+1);
 			memcpy(name, start, i);
 			name[i]=0;
-			/*puts(name); /* devout */
 			
 			for(j=0; vars[j]; j++);
 			vars[j]=xmalloc(2*sizeof(char*));
@@ -317,20 +299,35 @@ parse(void) {
 }
 
 int
-maketarget(char *target) {
-	int i;
+maketarget(char *targetname) {
+	struct target **target;
+	char **pp;
 	
 	/* TODO: isliteral */
-	/* TODO: check if needs execution */
 	/* TODO: recurse */
-	/* TODO: execute commands */
-	for(i=0; targetlist[i] && strcmp((*targetlist[i]).name, target); i++)
+	/* TODO: support for multiple targets of same name */
 	
-	if(!targetlist[i]) {
-		fprintf(stderr, "make: *** no target '%s'\n", target);
-		exit(1);
+	/* TODO: timestamp check */
+	if(!access(targetname, F_OK))
+		return 0;
+
+	for(target=targetlist; target && strcmp((**target).name, targetname); target++);
+
+	if(!*target) {
+			fprintf(stderr, "make: *** cannot make '%s'\n", targetname);
+			exit(1);
 	}
-	puts(target); /* devout */
+	
+	for(pp=(**target).cmds; *pp; pp++) {
+		if(**pp=='@') {
+			system(*pp+1);
+		} else {
+			puts(*pp);
+			system(*pp);
+		}
+	}
+
+	return 0;
 }
 
 int
